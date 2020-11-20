@@ -4,6 +4,7 @@
 #include "heap.h"
 #include "stack.h"
 #include "btree.h"
+#include "bit.h"
 
 typedef struct character {
 	int count;
@@ -62,57 +63,26 @@ int traverse(Node *n, Encoding *encs, char val, char len) {
 	return sizeLeft + sizeRight;
 }
 
-void headerTraverse(Node *n, Encoding *encs, char* header, int *headerIdx, char *bitIdx) {
+void headerTraverse(Node *n, Encoding *encs, char *header, int *headerIdx) {
 	if (n->left) {
-		headerTraverse(n->left, encs, header, headerIdx, bitIdx);
+		headerTraverse(n->left, encs, header, headerIdx);
 	}
 	if (n->right) {
-		headerTraverse(n->right, encs, header, headerIdx, bitIdx);
+		headerTraverse(n->right, encs, header, headerIdx);
 	}
 
 	Character *c = n->data;
 
 	if (c->isLeaf) {
-	
-		header[*headerIdx] <<= 1;
-		header[*headerIdx] |= 1;
-		(*bitIdx)++;
 
-		if (*bitIdx == 8) {
-			(*headerIdx)++;
-			header[*headerIdx] = 0;
-			*bitIdx = 0;
-		}
-
-		union {
-			char c[2];
-			short s;
-		} u;
-		u.c[0] = c->c;
-
-		int i = 8;
-		while(i--) {
-			u.s <<= 1;
-			header[*headerIdx] <<= 1;
-			header[*headerIdx] |= (u.c[1] & 1);
-			(*bitIdx)++;
-
-			if (*bitIdx == 8) {
-				(*headerIdx)++;
-				header[*headerIdx] = 0;
-				*bitIdx = 0;
-			}
+		BIT_write(header, (*headerIdx)++, 1);
+		
+		for(int i = 7; i >=0; i--) {
+			BIT_write(header, (*headerIdx)++, (c->c >> i) & 1);
 		}
 
 	} else {
-		header[*headerIdx] <<= 1;
-		(*bitIdx)++;
-
-		if (*bitIdx == 8) {
-			(*headerIdx)++;
-			header[*headerIdx] = 0;
-			*bitIdx = 0;
-		}
+		BIT_write(header, (*headerIdx)++, 0);
 	}
 
 }
@@ -176,82 +146,35 @@ int main(int argc, char **argv) {
 
 		Node *n = HEAP_remove(h);
 
-		int bitSize = traverse(n, encs, 0, 0) + 1;
+		int bitCount = traverse(n, encs, 0, 0) + 1;
 
-		int bitOffset = ((8 - (bitSize%8))%8);
+		int bitOffset = ((8 - (bitCount%8))%8);
 		// round up bits to multiple of 8
-		int byteSize = (bitSize+bitOffset)/8;
+		int byteCount = (bitCount+bitOffset)/8;
 
-		printf("---%d\n", byteSize);
-		printf("---%d\n", bitOffset);
+		char *outputData = malloc(byteCount);
 
-		char *outputData = malloc(byteSize);
-
-		char len = bitOffset;
-		int outputIdx = 0;
-
-		outputData[outputIdx] = 1;
-		len++;
+		int outputIdx = bitOffset;
+		BIT_write(outputData, outputIdx++, 1);
 		for (int i = 0 ; i < inputSize; i++) {
 			Encoding enc = encs[inputData[i]];
 			printf("%c - %x - %d\n", inputData[i], enc.val, enc.len);
-			union {
-				char c[2];
-				short s;
-			} u;
-			u.c[0] = enc.val << (8 - enc.len);
 
-			while (enc.len--) {
-				
-				u.s <<= 1;
-				outputData[outputIdx] <<= 1;
-				outputData[outputIdx] |= (u.c[1] & 1);
-				len++;
-
-				if (len == 8) {
-					len = 0;
-					outputIdx++;
-					outputData[outputIdx] = 0;
-				}
+			for (int j = enc.len; j >= 0 ; j--) {
+				BIT_write(outputData, outputIdx++, (enc.val >> j) & 1);
 			}
 		}
 
 		char *header = malloc(512);
 
-		int headerIdx = 4;
-		char bitIdx = 0;
+		int headerIdx = 0;
 
-		header[0] = 0;
-		headerTraverse(n, encs, header, &headerIdx, &bitIdx);
-
-		header[headerIdx] <<= 1;
-		(bitIdx)++;
-
-		if (bitIdx == 8) {
-			(headerIdx)++;
-			header[headerIdx] = 0;
-			bitIdx = 0;
-		}
-
-		for (int i = bitIdx; i < 8; i++) {
-			header[headerIdx] <<= 1;
-		}
-		union {
-			char c[4];
-			int i;
-		} u;
-		u.i = headerIdx;
-
-		header[0] = u.c[0];
-		header[1] = u.c[1];
-		header[2] = u.c[2];
-		header[3] = u.c[3];
-
+		headerTraverse(n, encs, header, &headerIdx);
 
 		FILE *output = fopen(argv[3], "w+");
 
-		fwrite(header, headerIdx, 1, output);
-		fwrite(outputData, byteSize, 1, output);
+		fwrite(header, (headerIdx+7)/8, 1, output);
+		fwrite(outputData, byteCount, 1, output);
 
 	} else if (argv[1][1] == 'd'){
 		

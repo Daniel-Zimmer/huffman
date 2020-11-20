@@ -9,6 +9,7 @@ struct node {
 
 typedef struct node Node;
 
+Node *BTREE_create(void *val);
 Node *BTREE_insertLeft(Node *n, void *val);
 Node *BTREE_insertRight(Node *n, void *val);
 void  BTREE_traversePost(Node *n, void (*func) (void *));

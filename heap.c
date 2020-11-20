@@ -30,7 +30,7 @@ static void down(Heap *h, int i) {
 	}
 	int f2 = f1 + 1;
 	if (f2 < h->len) {
-		if (h->data[f2] < h->data[f1] && h->data[f2] < h->data[i]) {
+		if (h->compFunc(h->data[f2], h->data[f1]) && h->compFunc(h->data[f2], h->data[i])) {
 			void *aux = h->data[i];
 			h->data[i] = h->data[f2];
 			h->data[f2] = aux;
@@ -38,7 +38,7 @@ static void down(Heap *h, int i) {
 			return;
 		}
 	}
-	if (h->data[f1] < h->data[i]) {
+	if (h->compFunc(h->data[f1], h->data[i])) {
 		void *aux = h->data[i];
 		h->data[i] = h->data[f1];
 		h->data[f1] = aux;
@@ -77,7 +77,7 @@ void *HEAP_remove(Heap *h) {
 	return val;
 }
 
-Heap *HEAP_construct(int vet[], int n, int (*compFunc) (void *a, void *b)) {
+Heap *HEAP_construct(void *vet[], int n, int (*compFunc) (void *a, void *b)) {
 	Heap *h = HEAP_create(compFunc);
 
 	for (int i = n / 2 - 1; i >= 0; i--) {
@@ -87,6 +87,8 @@ Heap *HEAP_construct(int vet[], int n, int (*compFunc) (void *a, void *b)) {
 	return h;
 }
 
+int HEAP_len(Heap *h) { return h->len; }
+
 // void heap_sort(int vet[], int n) {
 // 	construir2(vet, n);
 // 	for (int i = n - 1; i >= 0; i--) {
@@ -94,50 +96,4 @@ Heap *HEAP_construct(int vet[], int n, int (*compFunc) (void *a, void *b)) {
 // 		remover(vet, n--);
 // 		vet[i] = val;
 // 	}
-// }
-
-// int main() {
-// 	int vet1[TAM] = {
-// 		33,
-// 		39,
-// 		28,
-// 		66,
-// 		70,
-// 		60,
-// 		78,
-// 		95
-// 	};
-// 	int vet2[TAM] = {
-// 		33,
-// 		39,
-// 		28,
-// 		66,
-// 		70,
-// 		60,
-// 		78,
-// 		95
-// 	};
-// 	int tam = 8;
-// 	int nova_chave = 100;
-// 	construir1(vet1, tam);
-// 	for (int i = 0; i < tam; i++)
-// 		printf("%d\t", vet1[i]);
-// 	printf("\n");
-// 	construir2(vet2, tam);
-// 	for (int i = 0; i < tam; i++)
-// 		printf("%d\t", vet2[i]);
-// 	printf("\n");
-// 	remover(vet2, tam);
-// 	inserir(vet2, nova_chave, tam);
-// 	for (int i = 0; i < tam; i++)
-// 		printf("%d\t", vet2[i]);
-// 	printf("\n");
-// 	heap_sort(vet2, tam);
-// 	for (int i = 0; i < tam; i++)
-// 		printf("%d\t", vet2[i]);
-// 	printf("\n");
-// 	heap_sort(vet1, tam);
-// 	for (int i = 0; i < tam; i++)
-// 		printf("%d\t", vet1[i]);
-// 	printf("\n");
 // }

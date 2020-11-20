@@ -1,10 +1,10 @@
 CC = gcc
-CARGS = -Wall
+CARGS = -Wall -Wno-char-subscripts -g
 
 build: huffman
 
 clean:
-	rm heap.o stack.o huffman
+	rm huffman heap.o stack.o btree.o
 
 huffman: huffman.c heap.o stack.o btree.o
 	$(CC) $(CARGS) huffman.c \

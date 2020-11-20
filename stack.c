@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define INIT_CAPACITY 1
+#define INIT_CAPACITY 16
 
 struct stack {
 	int len;

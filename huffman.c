@@ -41,39 +41,21 @@ int HeapCompFunc(void *a, void *b) {
 	return countA < countB;
 }
 
-int traverse(Node *n, Encoding *encs, char val, char len) {
+int traverse(Node *n, char *header, int *headerIdx, Encoding *encs,  char val, char len) {
 	int sizeLeft, sizeRight;
 
 	if (n->left) {
-		sizeLeft = traverse(n->left, encs, val<<1, len+1);
+		sizeLeft = traverse(n->left, header, headerIdx, encs, val<<1, len+1);
 	}
 	if (n->right) {
-		sizeRight = traverse(n->right, encs, (val<<1) | 1, len+1);
+		sizeRight = traverse(n->right, header, headerIdx, encs, (val<<1) | 1, len+1);
 	}
 
 	Character *c = n->data;
 
 	if (c->isLeaf) {
-		encs[c->c].val = val;
-		encs[c->c].len = len;
 
-		return c->count * len;
-	}
-
-	return sizeLeft + sizeRight;
-}
-
-void headerTraverse(Node *n, Encoding *encs, char *header, int *headerIdx) {
-	if (n->left) {
-		headerTraverse(n->left, encs, header, headerIdx);
-	}
-	if (n->right) {
-		headerTraverse(n->right, encs, header, headerIdx);
-	}
-
-	Character *c = n->data;
-
-	if (c->isLeaf) {
+		// header
 
 		BIT_write(header, (*headerIdx)++, 1);
 		
@@ -81,10 +63,23 @@ void headerTraverse(Node *n, Encoding *encs, char *header, int *headerIdx) {
 			BIT_write(header, (*headerIdx)++, (c->c >> i) & 1);
 		}
 
-	} else {
-		BIT_write(header, (*headerIdx)++, 0);
+		// encodings
+
+		encs[c->c].val = val;
+		encs[c->c].len = len;
+
+		return c->count * len;
+
 	}
 
+	BIT_write(header, (*headerIdx)++, 0);
+	return sizeLeft + sizeRight;
+
+}
+
+int abs(int n) {
+	if (n) return n;
+	else   return -n;
 }
 
 int main(int argc, char **argv) {
@@ -96,6 +91,8 @@ int main(int argc, char **argv) {
 
 
 	if (argv[1][1] == 'e') {
+
+		// ----- reading file -----
 		FILE *input = fopen(argv[2], "r");
 		fseek(input, 0, SEEK_END);
 		long inputSize = ftell(input);
@@ -104,6 +101,7 @@ int main(int argc, char **argv) {
 		char *inputData = malloc(inputSize);
 		fread(inputData, inputSize, 1, input);
 
+		// ----- counting each character in file -----
 		Character c[256];
 
 		for (int i = 0; i < 256; i++) {
@@ -116,6 +114,7 @@ int main(int argc, char **argv) {
 			c[(int) inputData[i]].count++;
 		}
 
+		// ----- creating heap -----
 		Heap *h = HEAP_create(HeapCompFunc);
 
 		for (int i = 0; i < 256; i++) {
@@ -125,6 +124,7 @@ int main(int argc, char **argv) {
 			}
 		}
 
+		// ----- using heap to create btree -----
 		while (HEAP_len(h) > 1) {
 			Node *right = HEAP_remove(h);
 			Node *left  = HEAP_remove(h);
@@ -142,39 +142,47 @@ int main(int argc, char **argv) {
 			h = HEAP_insert(h, p);
 		}
 
-		Encoding encs[256];
-
 		Node *n = HEAP_remove(h);
 
-		int bitCount = traverse(n, encs, 0, 0) + 1;
+		// ----- creating header and encodings -----
 
-		int bitOffset = ((8 - (bitCount%8))%8);
-		// round up bits to multiple of 8
-		int byteCount = (bitCount+bitOffset)/8;
+		Encoding encs[256];
 
-		char *outputData = malloc(byteCount);
+		char *outputData = malloc(512);
+		int index = 0;
 
-		int outputIdx = bitOffset;
-		BIT_write(outputData, outputIdx++, 1);
+		int msgBitCount = traverse(n, outputData, &index, encs, 0, 0);
+
+		// rounding up output file size to nearest multiple of 8
+		int outputSize = (msgBitCount + index + 7 + 1) / 8;
+		outputData = realloc(outputData, outputSize);
+
+		// ----- encoding input data -----
+
+		int extra = (msgBitCount + 1)%8;
+		int remaining = 8 - (index%8);
+
+		int offset = abs(remaining - extra);
+		while (offset--) {
+			BIT_write(outputData, index++, 0);
+		}
+		// 1 to signal beginning of message
+		BIT_write(outputData, index++, 1);
+
 		for (int i = 0 ; i < inputSize; i++) {
 			Encoding enc = encs[inputData[i]];
 			printf("%c - %x - %d\n", inputData[i], enc.val, enc.len);
 
-			for (int j = enc.len; j >= 0 ; j--) {
-				BIT_write(outputData, outputIdx++, (enc.val >> j) & 1);
+			for (int j = enc.len-1; j >= 0 ; j--) {
+				BIT_write(outputData, index++, (enc.val >> j) & 1);
 			}
 		}
 
-		char *header = malloc(512);
-
-		int headerIdx = 0;
-
-		headerTraverse(n, encs, header, &headerIdx);
+		// ----- opening and writing to output file -----
 
 		FILE *output = fopen(argv[3], "w+");
 
-		fwrite(header, (headerIdx+7)/8, 1, output);
-		fwrite(outputData, byteCount, 1, output);
+		fwrite(outputData, outputSize, 1, output);
 
 	} else if (argv[1][1] == 'd'){
 		

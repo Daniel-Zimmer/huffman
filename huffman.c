@@ -53,6 +53,8 @@ int traverse(Node *n, char *header, int *headerIdx, Encoding *encs,  char val, c
 
 	Character *c = n->data;
 
+	printf("%s - ", c->isLeaf ? "is leaf" : "no leaf");
+
 	if (c->isLeaf) {
 
 		// header
@@ -68,9 +70,13 @@ int traverse(Node *n, char *header, int *headerIdx, Encoding *encs,  char val, c
 		encs[c->c].val = val;
 		encs[c->c].len = len;
 
+		printf("%c - %x - %d\n", c->c, encs[c->c].val, encs[c->c].len);
+
 		return c->count * len;
 
 	}
+
+	printf("\n");
 
 	BIT_write(header, (*headerIdx)++, 0);
 	return sizeLeft + sizeRight;
@@ -78,8 +84,8 @@ int traverse(Node *n, char *header, int *headerIdx, Encoding *encs,  char val, c
 }
 
 int abs(int n) {
-	if (n) return n;
-	else   return -n;
+	if (n >= 0) return  n;
+	else        return -n;
 }
 
 int main(int argc, char **argv) {
@@ -93,6 +99,7 @@ int main(int argc, char **argv) {
 	if (argv[1][1] == 'e') {
 
 		// ----- reading file -----
+
 		FILE *input = fopen(argv[2], "r");
 		fseek(input, 0, SEEK_END);
 		long inputSize = ftell(input);
@@ -102,6 +109,7 @@ int main(int argc, char **argv) {
 		fread(inputData, inputSize, 1, input);
 
 		// ----- counting each character in file -----
+
 		Character c[256];
 
 		for (int i = 0; i < 256; i++) {
@@ -115,6 +123,7 @@ int main(int argc, char **argv) {
 		}
 
 		// ----- creating heap -----
+
 		Heap *h = HEAP_create(HeapCompFunc);
 
 		for (int i = 0; i < 256; i++) {
@@ -125,6 +134,7 @@ int main(int argc, char **argv) {
 		}
 
 		// ----- using heap to create btree -----
+
 		while (HEAP_len(h) > 1) {
 			Node *right = HEAP_remove(h);
 			Node *left  = HEAP_remove(h);
@@ -152,6 +162,7 @@ int main(int argc, char **argv) {
 		int index = 0;
 
 		int msgBitCount = traverse(n, outputData, &index, encs, 0, 0);
+		BIT_write(outputData, index++, 0);
 
 		// rounding up output file size to nearest multiple of 8
 		int outputSize = (msgBitCount + index + 7 + 1) / 8;
@@ -171,7 +182,6 @@ int main(int argc, char **argv) {
 
 		for (int i = 0 ; i < inputSize; i++) {
 			Encoding enc = encs[inputData[i]];
-			printf("%c - %x - %d\n", inputData[i], enc.val, enc.len);
 
 			for (int j = enc.len-1; j >= 0 ; j--) {
 				BIT_write(outputData, index++, (enc.val >> j) & 1);
@@ -181,11 +191,12 @@ int main(int argc, char **argv) {
 		// ----- opening and writing to output file -----
 
 		FILE *output = fopen(argv[3], "w+");
-
 		fwrite(outputData, outputSize, 1, output);
 
 	} else if (argv[1][1] == 'd'){
 		
+		// ----- reading file -----
+
 		FILE *input = fopen(argv[2], "r");
 		fseek(input, 0, SEEK_END);
 		long inputSize = ftell(input);
@@ -194,54 +205,19 @@ int main(int argc, char **argv) {
 		char *inputData = malloc(inputSize);
 		fread(inputData, inputSize, 1, input);
 		
+		// ----- creating btree from header -----
+
 		Stack *s = STACK_create();
 
-		union {
-			char c[4];
-			int i;
-		} uu;
-		uu.c[0] = inputData[0];
-		uu.c[1] = inputData[1];
-		uu.c[2] = inputData[2];
-		uu.c[3] = inputData[3];
+		int index = 0;
+		for (;;) {
+			if (BIT_read(inputData, index++) == 1) {
 
-		union {
-			char c[2];
-			short s;
-		} u;
-
-		int bits = 0;
-		char bit = 0;
-		int inputIdx = 4;
-
-		u.c[0] = inputData[inputIdx];
-
-		for (int i = 0; i < uu.i - 4; i++) {
-			if (bits == 8) {
-				inputIdx++;
-				u.c[0] = inputData[inputIdx];
-				bits = 0;
-			}
-
-			u.s <<= 1;
-			bit = u.c[1] & 1;
-			bits++;
-			if (bit == 1) {
+				// read byte
 				char ascii = 0;
 				for (int i = 0; i < 8; i++) {
-
-					if (bits == 8) {
-						inputIdx++;
-						u.c[0] = inputData[inputIdx];
-						bits = 0;
-					}
-
-					u.s <<= 1;
-					bit = (u.c[1] & 1);
-					bits++;
-
 					ascii <<= 1;
-					ascii |= bit;
+					ascii |= BIT_read(inputData, index++);
 				}
 
 				Character *ch = malloc(sizeof(Character));
@@ -249,11 +225,13 @@ int main(int argc, char **argv) {
 				ch->c = ascii;
 				Node *n = BTREE_create(ch);
 				s = STACK_push(s, n);
-				
-			} else {
+
+			} else { // bit == 0
+
 				if (STACK_len(s) == 1) {
 					break;
 				}
+
 				Node *right = STACK_pop(s);
 				Node *left  = STACK_pop(s);
 
@@ -267,12 +245,33 @@ int main(int argc, char **argv) {
 			}
 		}
 
-
 		Node *tree = STACK_pop(s);
 
-		printf("%p\n", tree);
+		while (BIT_read(inputData, index++) == 0);
 
-		
+		int outputSize = 2024;
+		char *outputData = malloc(outputSize);
+		int outputIndex = 0;
+
+		Node *current = tree;
+		while (index <= inputSize*8) {
+			Character *c = (Character *) current->data;
+			if (c->isLeaf) {
+				outputData[outputIndex++] = c->c;
+				current = tree;
+				continue;
+			}
+			if (BIT_read(inputData, index++) == 0) {
+				current = current->left;
+			} else {
+				current = current->right;
+			}
+		}
+
+		// ----- opening and writing to output file -----
+
+		FILE *output = fopen(argv[3], "w+");
+		fwrite(outputData, outputIndex, 1, output);
 
 	} else {
 

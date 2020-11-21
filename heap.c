@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define INIT_CAPACITY 16
+#define INIT_CAPACITY 160
 
 struct heap {
 	int len;

@@ -1,8 +1,6 @@
 #ifndef HEAP_H
 #define HEAP_H
 
-#define INIT_CAPACITY 16
-
 typedef struct heap Heap;
 
 Heap *HEAP_create(int (*compFunc) (void *a, void *b));
